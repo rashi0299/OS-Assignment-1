@@ -7,22 +7,30 @@
 #include<ctype.h>
 #include<errno.h>
 
+void siginthandler(int signal)
+{
+    printf("\nType \"quit\" (without quotes) to exit\n");
+}
+
 int main()
 {
-    char currentD[FILENAME_MAX];
-    getcwd(currentD,FILENAME_MAX);
-    printf("%s",&currentD);
-    
+    signal(SIGINT,siginthandler);
+    int pid;
+
     while(1)
     {
-        //printf("rashi@rashi:~$");
+        pid = 0;
+        char currentD[FILENAME_MAX];
+        getcwd(currentD,FILENAME_MAX);
+        printf("rashi@rashi:%s$ ",currentD);
         char array[1000];            //stores the input
-        char *finalArr[1000];       // stores after tok
+        char *finalArr[1000] = {NULL};       // stores after tok
         
         scanf("%[^\n]s",array);
-        printf("%s\n",&array);
+        while ((getchar()) != '\n'); 
         
         char* token = strtok(array," ");
+
         int noOfTokens=0;
         
         while(token != NULL)
@@ -32,40 +40,80 @@ int main()
             token = strtok(NULL, " ");
         }
         if(strcmp(finalArr[0],"quit")==0)
-            break;
+        {
+            if(pid!=0) kill(pid,SIGKILL);
+            exit(0);
+        }
         else if(strcmp(finalArr[0],"cd")==0 || strcmp(finalArr[0],"ls")==0 || strcmp(finalArr[0],"wc")==0 || strcmp(finalArr[0],"echo")==0)
         {
-            int pid;
-            pid=fork();
-            if(pid==0)
+
+            if(strcmp(finalArr[0],"cd")==0)
             {
-                if(strcmp(finalArr[0],"cd")==0)
+                if(finalArr[1] != NULL)
                 {
-                    if(finalArr[1] != NULL)
+                    if(chdir(finalArr[1])!=0)
                     {
-                        strcat(currentD,finalArr[1]);
+                        printf("No such directory!\n");
+                    }
+
+                }
+            }
+            else if(strcmp(finalArr[0],"wc")==0)
+            {
+                pid = fork();
+                {
+                    if(pid==0)
+                    {
+
+                        char * args[] = {finalArr[0],finalArr[1],finalArr[2], NULL};
+                        execvp(args[0],args);  
+                        
+                    }
+                    else
+                    {
+                        int stat;
+                        wait(&stat);
+                    }
+                }   
+            }
+            else if(strcmp(finalArr[0],"ls")==0)
+            {
+                pid = fork();
+                if(pid==0)
+                {
+                    if(finalArr[1]!=NULL)
+                    {
+                        printf("finalArr[1] = %s\n",finalArr[1]);
+                        char * args[] = {finalArr[0],finalArr[1],NULL};
+                        execvp(args[0],args);  
+                    }
+                    else
+                    {
+                        printf("%s\n",currentD);
+                        char * args[] = {finalArr[0],currentD,NULL};
+                        execvp(args[0],args);  
                     }
                 }
-                else if(strcmp(finalArr[0],"wc")==0)
-                {
-                    char temp[FILENAME_MAX];
-                    strcpy(temp,currentD);
-                    strcat(temp,finalArr[2]);
-                    char * args[] = {finalArr[0],finalArr[1],temp};
-                    execvp(args[0],args);  
-                }
-                else if(strcmp(finalArr[0],"ls")==0)
-                {
-                    char * args[] = {finalArr[0],currentD};
-                    execvp(args[0],args);  
-                }
                 else
-                    printf("%s",&finalArr[1]);
+                {
+                    int stat;
+                    wait(&stat);
+                }
             }
             else
             {
-                int status;
-                wait(&status);
+                pid = fork();
+                {
+                    if(pid==0)
+                    {
+                        execvp(finalArr[0],finalArr);  
+                    }
+                    else
+                    {
+                        int stat;
+                        wait(&stat);
+                    }
+                }   
             }
             
         }
