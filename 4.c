@@ -1,38 +1,103 @@
 #include<stdio.h>
+#include<unistd.h>
+#include<string.h>
 #include<stdlib.h>
-#include <unistd.h>
-#include<sys/types.h>
+#include<signal.h>
 #include<sys/wait.h>
-#include<ctype.h>
-#include <time.h>
-#include<errno.h>
 
-int main(int argc, char *argv[])
-{
-	int fds[2];
-	pipe(fds);
+void my_handler(){
 
-	int pid=fork();
+	printf(" Type 'quit' to exit\nShell:");
+	fflush(stdout);
+}
 
-	if(pid==0)
-	{
-		//child process
-		close(fds[0]);
-		dup2(fds[1],1);
+char* get_line(void){
 
-		char * args[] = {"grep",argv[1],"-n",argv[2],NULL};
-		execvp(args[0],args);  
-		
+	char* line= NULL;
+	ssize_t buffer_size=0;
+	getline(&line,&buffer_size,stdin);
+
+	return line;
+} 
+
+
+char** get_tokens(char* line,int* size){
+	char** tokens= (char**)malloc(100*sizeof(char*));
+	char* token;
+	while(token=strtok_r(line," ",&line)){
+		tokens[(*size)++]=token;
 	}
-	else
-	{
-		
-		close(fds[1]);
-		dup2(fds[0],0);
-		// cut command 
-		char * args[] = {"cut","-d",":","-f","1","-",NULL};
-		execvp(args[0],args); 
+	tokens[(*size)-1][strlen(tokens[(*size)-1])-1]='\0';
+	tokens[(*size)++]=(char*)NULL;
 
+	return tokens;
+}
+
+
+void execute(char* path,char** args){
+
+	int pid= fork();
+	if(pid==0){
+		char* cmd= (char*)malloc(1000);
+		cmd[0]='\0';
+		strcat(cmd,path);
+		strcat(cmd,args[0]);
+		if(execv(cmd,args)==-1) perror("Error in Command");
+		exit(0);
+	}else{
+		wait(NULL);
+		return;
 	}
+	return;
+}
+
+
+void my_cd(char** args,int size){
+
+	if(size>3){
+		perror("Number of arguments");
+		return;
+	}
+
+	if(chdir(args[1])==-1){
+		perror("File error");
+	}
+	else{
+		char* args[2]={"pwd",(char*)NULL};
+		return execute("/bin/",args);
+	}
+
+}
+
+int my_wc(char** args){
+	execute("/usr/bin/",args);
+}
+
+int main(){
+
+	char quit[5];
+	char check[5];
+	strcpy(quit,"quit");
+	signal(SIGINT,my_handler);
+	int flag;
+	while(1){
+		flag=1;
+		printf("Shell: ");
+		char* line= get_line();
+		if(line[0]=='\n') continue;
+		int size=0;
+		if(strlen(line)==5){
+			strcpy(check,line);
+			if(strncmp(check,quit,4)==0) break;
+		}
+		char** tokens= get_tokens(line,&size);
+		if(strcmp(tokens[0],"cd")==0)my_cd(tokens,size);
+		else if(strcmp(tokens[0],"wc")==0)my_wc(tokens);
+		// else if(strcmp(tokens[0],"pwd")==0)execute("/bin/",tokens);
+		else if(strcmp(tokens[0],"echo")==0 || strcmp(tokens[0],"ls")==0)execute("/bin/",tokens);
+		else printf("Command not found\n");
+	}
+
+
 	return 0;
 }
